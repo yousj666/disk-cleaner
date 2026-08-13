@@ -9,6 +9,8 @@ venv/
 build/
 dist/
 *.spec
+/DiskCleaner.exe
+/DiskCleaner-EN.exe
 
 # 清理历史日志
 清理历史.log
