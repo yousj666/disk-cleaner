@@ -241,63 +241,134 @@ class CleanerApp:
         self.busy = False
         self.history_path = os.path.join(app_dir(), "clean_history.log")
 
+        self._setup_style()
         self._build_ui()
         self._update_disk()
         self.root.after(100, self._poll_queue)
         self.start_scan()
 
+    # ------------------------------------------------------------ style
+    def _setup_style(self):
+        style = ttk.Style()
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+
+        self.C_PRIMARY = "#2E7CF6"
+        self.C_PRIMARY_DARK = "#1B5FC4"
+        self.C_BG = "#F0F2F5"
+        self.C_CARD = "#FFFFFF"
+        self.C_DANGER = "#E5484D"
+        self.C_TEXT = "#1F2329"
+        self.C_MUTED = "#8A9099"
+
+        self.root.configure(bg=self.C_BG)
+
+        fb = ("Microsoft YaHei UI", 9)
+        fbold = ("Microsoft YaHei UI", 9, "bold")
+
+        style.configure("TFrame", background=self.C_BG)
+        style.configure("Card.TFrame", background=self.C_CARD)
+        style.configure("Header.TFrame", background=self.C_PRIMARY)
+
+        style.configure("TLabel", background=self.C_BG, foreground=self.C_TEXT, font=fb)
+        style.configure("HeaderTitle.TLabel", background=self.C_PRIMARY, foreground="#FFFFFF",
+                        font=("Microsoft YaHei UI", 17, "bold"))
+        style.configure("HeaderSub.TLabel", background=self.C_PRIMARY, foreground="#D6E4FF",
+                        font=("Microsoft YaHei UI", 9))
+        style.configure("Card.TLabel", background=self.C_CARD, foreground=self.C_TEXT, font=fb)
+        style.configure("CardTitle.TLabel", background=self.C_CARD, foreground=self.C_TEXT,
+                        font=("Microsoft YaHei UI", 10, "bold"))
+        style.configure("Muted.TLabel", background=self.C_CARD, foreground=self.C_MUTED,
+                        font=("Microsoft YaHei UI", 8))
+
+        style.configure("TButton", font=fb, padding=(12, 7), background="#FFFFFF", borderwidth=0)
+        style.map("TButton", background=[("active", "#E7EDF5")])
+
+        style.configure("Accent.TButton", background=self.C_PRIMARY, foreground="#FFFFFF",
+                        font=fbold, padding=(18, 8), borderwidth=0)
+        style.map("Accent.TButton",
+                  background=[("active", self.C_PRIMARY_DARK), ("disabled", "#B9CBE8")],
+                  foreground=[("disabled", "#FFFFFF")])
+
+        style.configure("Treeview", font=fb, rowheight=32, background=self.C_CARD,
+                        fieldbackground=self.C_CARD, foreground=self.C_TEXT, borderwidth=0)
+        style.configure("Treeview.Heading", font=fbold, background="#E8EDF3",
+                        foreground=self.C_TEXT, relief="flat")
+        style.map("Treeview",
+                  background=[("selected", "#D6E6FF")],
+                  foreground=[("selected", self.C_TEXT)])
+        style.map("Treeview.Heading", background=[("active", "#DDE4ED")])
+
+        style.configure("Disk.Horizontal.TProgressbar", troughcolor="#E3E8EF",
+                        background=self.C_PRIMARY, thickness=16, borderwidth=0)
+        style.configure("TProgressbar", troughcolor="#E3E8EF", background=self.C_PRIMARY,
+                        thickness=10, borderwidth=0)
+
     # ------------------------------------------------------------ UI
     def _build_ui(self):
-        pad = {"padx": 8, "pady": 4}
+        pad = 12
 
-        top = ttk.Frame(self.root)
-        top.pack(fill="x", **pad)
-        self.disk_label = ttk.Label(top, text="", font=("Microsoft YaHei UI", 10, "bold"))
-        self.disk_label.pack(side="left")
+        # header banner
+        header = ttk.Frame(self.root, style="Header.TFrame")
+        header.pack(fill="x")
+        ttk.Label(header, text="Disk Cleaner", style="HeaderTitle.TLabel").pack(anchor="w", padx=20, pady=(16, 2))
+        ttk.Label(header, text="Safely clean C: temp files & caches · deleted items are recoverable", style="HeaderSub.TLabel").pack(anchor="w", padx=20, pady=(0, 16))
 
-        admin_note = "(Running as administrator)" if is_admin() else "(Not running as admin; Windows/update caches may fail to clean)"
-        ttk.Label(top, text=admin_note, foreground="#888").pack(side="right")
+        # disk space card
+        disk_card = ttk.Frame(self.root, style="Card.TFrame")
+        disk_card.pack(fill="x", padx=pad, pady=(pad, 6))
+        self.disk_label = ttk.Label(disk_card, text="Reading disk info...", style="Card.TLabel",
+                                    font=("Microsoft YaHei UI", 11, "bold"))
+        self.disk_label.pack(anchor="w", padx=14, pady=(12, 8))
+        self.disk_bar = ttk.Progressbar(disk_card, style="Disk.Horizontal.TProgressbar", maximum=100)
+        self.disk_bar.pack(fill="x", padx=14, pady=(0, 6))
+        self.admin_label = ttk.Label(disk_card, text="", style="Muted.TLabel")
+        self.admin_label.pack(anchor="w", padx=14, pady=(0, 10))
 
-        # list
-        mid = ttk.Frame(self.root)
-        mid.pack(fill="both", expand=True, **pad)
+        # list card
+        list_card = ttk.Frame(self.root, style="Card.TFrame")
+        list_card.pack(fill="both", expand=True, padx=pad, pady=6)
         cols = ("check", "name", "size", "count", "desc")
-        self.tree = ttk.Treeview(mid, columns=cols, show="headings", selectmode="browse")
+        self.tree = ttk.Treeview(list_card, columns=cols, show="headings", selectmode="browse")
         self.tree.heading("check", text="")
         self.tree.heading("name", text="Item")
         self.tree.heading("size", text="Size")
         self.tree.heading("count", text="Files")
         self.tree.heading("desc", text="Description")
         self.tree.column("check", width=44, anchor="center", stretch=False)
-        self.tree.column("name", width=150, anchor="w")
+        self.tree.column("name", width=165, anchor="w")
         self.tree.column("size", width=100, anchor="e")
         self.tree.column("count", width=80, anchor="e")
-        self.tree.column("desc", width=380, anchor="w")
-        vsb = ttk.Scrollbar(mid, orient="vertical", command=self.tree.yview)
+        self.tree.column("desc", width=430, anchor="w")
+        self.tree.tag_configure("danger", foreground=self.C_DANGER)
+        vsb = ttk.Scrollbar(list_card, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=vsb.set)
-        self.tree.pack(side="left", fill="both", expand=True)
-        vsb.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=10)
+        vsb.pack(side="right", fill="y", padx=(0, 6), pady=10)
         self.tree.bind("<Button-1>", self._on_click)
 
-        # bottom stats + buttons
+        # bottom action bar
         bottom = ttk.Frame(self.root)
-        bottom.pack(fill="x", **pad)
-        self.selected_label = ttk.Label(bottom, text="Selected: 0 B")
+        bottom.pack(fill="x", padx=pad, pady=(6, pad))
+        self.selected_label = ttk.Label(bottom, text="Selected: 0 B", font=("Microsoft YaHei UI", 10, "bold"))
         self.selected_label.pack(side="left")
-        ttk.Button(bottom, text="Select All", command=lambda: self._set_all(True)).pack(side="right")
-        ttk.Button(bottom, text="Select None", command=lambda: self._set_all(False)).pack(side="right")
-        ttk.Button(bottom, text="Analyze", command=self.start_scan).pack(side="right", padx=4)
-        ttk.Button(bottom, text="Open Recycle Bin", command=self._open_recycle).pack(side="right", padx=4)
-        self.clean_btn = ttk.Button(bottom, text="Clean Selected", command=self.start_clean)
-        self.clean_btn.pack(side="right", padx=4)
+        ttk.Button(bottom, text="Select All", command=lambda: self._set_all(True)).pack(side="right", padx=3)
+        ttk.Button(bottom, text="Select None", command=lambda: self._set_all(False)).pack(side="right", padx=3)
+        ttk.Button(bottom, text="Analyze", command=self.start_scan).pack(side="right", padx=3)
+        ttk.Button(bottom, text="Open Recycle Bin", command=self._open_recycle).pack(side="right", padx=3)
+        self.clean_btn = ttk.Button(bottom, text="Clean Selected", style="Accent.TButton", command=self.start_clean)
+        self.clean_btn.pack(side="right", padx=(3, 0))
 
         self.progress = ttk.Progressbar(self.root, mode="determinate")
-        self.progress.pack(fill="x", padx=8)
+        self.progress.pack(fill="x", padx=pad)
 
         # log
         logf = ttk.LabelFrame(self.root, text="Log")
-        logf.pack(fill="x", **pad)
-        self.log = tk.Text(logf, height=6, state="disabled", wrap="word")
+        logf.pack(fill="x", padx=pad, pady=(6, 0))
+        self.log = tk.Text(logf, height=5, state="disabled", wrap="word", relief="flat",
+                           bg="#FAFBFC", fg=self.C_TEXT, font=("Microsoft YaHei UI", 9))
         lsb = ttk.Scrollbar(logf, orient="vertical", command=self.log.yview)
         self.log.configure(yscrollcommand=lsb.set)
         self.log.pack(side="left", fill="both", expand=True, padx=4, pady=4)
@@ -306,9 +377,14 @@ class CleanerApp:
     def _update_disk(self):
         try:
             total, used, free = shutil.disk_usage("C:\\")
+            pct = used / total * 100
             self.disk_label.config(
                 text="C: Total %s / Used %s / Free %s (%.0f%% used)"
-                % (fmt_size(total), fmt_size(used), fmt_size(free), used / total * 100)
+                % (fmt_size(total), fmt_size(used), fmt_size(free), pct)
+            )
+            self.disk_bar.config(value=pct)
+            self.admin_label.config(
+                text="Running as administrator" if is_admin() else "Not running as admin; Windows/update caches may fail to clean"
             )
         except OSError:
             self.disk_label.config(text="Failed to read C: drive space")
@@ -337,12 +413,19 @@ class CleanerApp:
             self._refresh_row(iid)
             self._update_selected()
 
+    def _is_safe(self, iid):
+        for it in self.items:
+            if it["id"] == iid:
+                return it.get("safe", True)
+        return True
+
     def _refresh_row(self, iid):
         mark = "☑" if self.checked.get(iid) else "☐"
         r = self.results.get(iid, {})
         size = fmt_size(r.get("size", 0))
         count = str(r.get("count", 0))
-        self.tree.item(iid, values=(mark, self._name_of(iid), size, count, self._desc_of(iid)))
+        tags = () if self._is_safe(iid) else ("danger",)
+        self.tree.item(iid, values=(mark, self._name_of(iid), size, count, self._desc_of(iid)), tags=tags)
 
     def _name_of(self, iid):
         for it in self.items:
@@ -383,9 +466,10 @@ class CleanerApp:
         self._log("Analyzing...")
         self.tree.delete(*self.tree.get_children())
         for it in self.items:
+            tags = () if it.get("safe", True) else ("danger",)
             self.tree.insert("", "end", iid=it["id"],
                              values=("☐" if not self.checked[it["id"]] else "☑",
-                                     it["name"], "Scanning...", "-", it["desc"]))
+                                     it["name"], "Scanning...", "-", it["desc"]), tags=tags)
         threading.Thread(target=self._scan_worker, daemon=True).start()
 
     def _scan_worker(self):
